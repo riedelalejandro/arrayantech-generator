@@ -51,9 +51,11 @@ Lenguaje:      TypeScript estricto
 │   │   ├── Hero.tsx
 │   │   ├── Problem.tsx
 │   │   ├── Solution.tsx
+│   │   ├── Gallery.tsx
 │   │   ├── SocialProof.tsx
 │   │   ├── Pricing.tsx
 │   │   ├── Faq.tsx
+│   │   ├── Map.tsx
 │   │   └── Footer.tsx
 │   └── ui/
 │       ├── Button.tsx
@@ -63,6 +65,12 @@ Lenguaje:      TypeScript estricto
 │   └── content.ts          # Exporta los datos de detalles.md como objetos TS
 ├── public/
 │   └── images/
+│       ├── hero.jpg         # Imagen principal del hero (full-bleed)
+│       ├── gallery/         # Fotos de productos/servicios/local
+│       │   ├── 01.jpg
+│       │   ├── 02.jpg
+│       │   └── ...
+│       └── og-image.png
 ├── detalles.md             # ← Fuente de verdad del negocio
 ├── next.config.ts
 ├── tailwind.config.ts
@@ -148,13 +156,17 @@ export const siteConfig = {
 - Subheadline: expande el H1 con contexto. 1-2 oraciones.
 - CTA primario: botón con acción clara ("Empezar gratis", "Ver demo", "Contratar ahora")
 - CTA secundario: enlace menos prominente ("Ver cómo funciona ↓")
-- Elemento visual: imagen del producto, mockup, video corto o ilustración. No stock photos genéricas.
-- Social proof mínima: "Usado por +500 empresas" o similar, debajo del CTA
+- **Imagen de fondo full-bleed**: la sección entera es la imagen. Texto y CTAs van encima con overlay oscuro semitransparente que asegura legibilidad.
+- Social proof mínima debajo del CTA
 
 **Técnico:**
-- Animación de entrada con Framer Motion (`fadeInUp` staggered para headline → subheadline → CTAs)
-- LCP optimizado: imagen con `priority` en `next/image`
-- Responsive: en mobile el visual va debajo del texto
+- Imagen con `next/image` + `fill` + `objectFit="cover"` + `priority` (LCP). Ruta: `/images/hero.jpg`.
+- Si la imagen no existe aún, usar un `div` con gradiente del color primario del negocio como fallback — nunca dejar el fondo vacío.
+- Overlay: `div` absoluto con `bg-black/50` (o gradiente `from-black/70 to-black/30`) sobre la imagen.
+- Todo el texto en blanco sobre el overlay.
+- Animación de entrada con Framer Motion (`fadeInUp` staggered para headline → subheadline → CTAs).
+- Altura mínima: `min-h-screen` en desktop, `min-h-[70vh]` en mobile.
+- Responsive: en mobile el texto se centra.
 
 ---
 
@@ -191,7 +203,30 @@ export const siteConfig = {
 
 ---
 
-### 4. Social Proof
+### 4. Gallery / Fotos
+**Objetivo:** Mostrar el producto, servicio o espacio con imágenes reales. Las fotos venden más que el texto.
+
+**Debe incluir:**
+- Título de sección breve ("Nuestro trabajo", "El lugar", "Así nos ven", etc.)
+- Grid de imágenes: mínimo 4, máximo 8. Formato mixto para dinamismo visual:
+  - Una imagen grande (2 columnas) + varias chicas en desktop
+  - En mobile: scroll vertical simple
+- Si el negocio es gastronómico: fotos de platos, local y ambiente
+- Si es servicio: fotos de antes/después, proceso o equipo
+- Si es producto: fotos del producto en uso, detalle y packaging
+- Cada imagen con un caption corto opcional
+
+**Técnico:**
+- Usar `next/image` con `fill` o dimensiones fijas. Siempre `alt` descriptivo.
+- Las rutas de imagen vienen de `lib/content.ts` como array `gallery[]`.
+- Si la imagen no existe (ruta `[PENDIENTE]`): usar un `div` con gradiente temático y `// TODO:` en el código. **Nunca romper el layout por imágenes faltantes.**
+- Grid CSS: `grid-cols-2 md:grid-cols-3` con una celda destacada `col-span-2 row-span-2`.
+- Hover: `scale(1.03)` con `overflow-hidden` en el contenedor.
+- Animación `whileInView` staggered por imagen.
+
+---
+
+### 5. Social Proof
 **Objetivo:** Eliminar el escepticismo con evidencia real.
 
 **Puede incluir (según lo que haya en `detalles.md`):**
@@ -207,7 +242,7 @@ export const siteConfig = {
 
 ---
 
-### 5. Pricing
+### 6. Pricing
 **Objetivo:** Que el visitante no tenga excusa para no elegir un plan.
 
 **Debe incluir:**
@@ -224,7 +259,7 @@ export const siteConfig = {
 
 ---
 
-### 6. FAQ
+### 7. FAQ
 **Objetivo:** Resolver las objeciones que no se respondieron antes y dar el último empujón.
 
 **Debe incluir:**
@@ -239,7 +274,24 @@ export const siteConfig = {
 
 ---
 
-### 7. Footer
+### 8. Map / Ubicación
+**Objetivo:** Que el visitante sepa exactamente cómo llegar, sin tener que buscarlo por su cuenta.
+
+**Debe incluir:**
+- Mapa embebido de Google Maps (iframe) con la dirección del negocio
+- Al costado o debajo del mapa: dirección completa, teléfono, WhatsApp y horarios
+- CTA opcional: "Cómo llegar" que abre Google Maps en nueva pestaña
+
+**Técnico:**
+- Iframe de Google Maps: usar la URL `https://maps.google.com/maps?q=DIRECCIÓN_CODIFICADA&output=embed`
+- Encapsular el iframe en un `div` con `aspect-video` o altura fija (`h-64` en mobile, `h-96` en desktop).
+- El iframe debe tener `loading="lazy"` y estar dentro de un contenedor con `rounded-2xl overflow-hidden`.
+- Layout desktop: mapa izquierda (60%) / datos de contacto derecha (40%).
+- Layout mobile: mapa arriba, datos abajo.
+
+---
+
+### 9. Footer
 **Objetivo:** Credibilidad, navegación secundaria y datos legales.
 
 **Debe incluir:**
@@ -618,10 +670,10 @@ export const metadata: Metadata = {
 
 ## Resultado Esperado
 
-Un sitio web de una sola página (`/`) con las 7 secciones en orden:
+Un sitio web de una sola página (`/`) con las 9 secciones en orden:
 
 ```
-Hero → Problem → Solution → Social Proof → Pricing → FAQ → Footer
+Hero → Problem → Solution → Gallery → Social Proof → Pricing → FAQ → Map → Footer
 ```
 
 Que sea:

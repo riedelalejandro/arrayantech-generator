@@ -1,6 +1,6 @@
 ---
 name: prospectar
-description: Agente orquestador de prospección. Recibe ciudad, radio y categorías, busca negocios, los puntúa en paralelo, y para los HOT (score ≥ 80) investiga en internet y genera un detalles.md listo para usar con el prompt de sitio web.
+description: Agente orquestador de prospección. Recibe ciudad, radio y categorías, busca negocios (Python script), los puntúa en batch (Python script), y para los que llegan a score ≥ 70 investiga en internet y genera un detalles.md listo para usar con el prompt de sitio web.
 argument-hint: "[ciudad] [radio_km] [categoría]"
 ---
 
@@ -17,67 +17,74 @@ Sos un agente orquestador. Tu trabajo es coordinar subagentes para transformar u
 Extraé del mensaje del usuario:
 - **Ciudad** — requerido
 - **Radio** — en km (default: 5)
-- **Categoría** — tipo de negocio (default: general)
+- **Categoría** — uno o varios rubros separados por coma (default: general)
 
 ---
 
 ## Fase 1 — Búsqueda de negocios
 
-Ejecutá el skill `/buscar-negocios` con los parámetros recibidos.
+Ejecutá el script Python directamente (no gasta tokens de LLM):
 
-Obtené la lista de negocios del bloque JSON `## Datos crudos` del archivo generado en `negocios/`.
+- Si hay **un solo rubro**: usá `--rubro "{CATEGORÍA}"`
+- Si hay **múltiples rubros** (separados por coma): usá `--rubros "{CATEGORÍA1,CATEGORÍA2,...}"`
+
+```bash
+# Un rubro:
+python3 scripts/buscar-negocios.py \
+  --ciudad "{CIUDAD}" \
+  --radio {RADIO} \
+  --rubro "{CATEGORÍA}"
+
+# Múltiples rubros:
+python3 scripts/buscar-negocios.py \
+  --ciudad "{CIUDAD}" \
+  --radio {RADIO} \
+  --rubros "{CATEGORÍA1,CATEGORÍA2,CATEGORÍA3}"
+```
+
+Esperá a que termine. El script imprime el resumen y guarda el archivo en `negocios/`.
+
+El archivo generado tiene el slug `{SEARCH_SLUG}` (ej: `el-chalten-2-multi`, `potrerillos-5-food`). Reorganizá inmediatamente los archivos en una carpeta de búsqueda:
+
+```bash
+mkdir -p negocios/{SEARCH_SLUG}
+mv negocios/{SEARCH_SLUG}.md negocios/{SEARCH_SLUG}/
+```
+
+Leé el archivo `negocios/{SEARCH_SLUG}/{SEARCH_SLUG}.md` y extraé la lista de negocios del bloque `## Datos crudos (JSON)`.
 
 ---
 
-## Fase 2 — Filtro previo + Scoring en paralelo
+## Fase 2 — Filtro previo + Scoring
 
-### Pre-filtro: ¿vale la pena venderle un sitio?
+Ejecutá el script Python directamente (no gasta tokens de LLM):
 
-Antes de scorear, filtrá la lista. Solo pasan a scoring los negocios que cumplan **al menos una** de estas condiciones:
-
-1. **Sin sitio web** — `sitio_web` es null
-2. **Sitio en plataforma builder** — el dominio del `sitio_web` termina en alguno de estos sufijos:
-   - `.wix.com`, `.wixsite.com`
-   - `.blogspot.com`, `.blogger.com`
-   - `.wordpress.com`
-   - `.weebly.com`
-   - `.squarespace.com` *(solo subdominios, no dominios propios en Squarespace)*
-   - `.webnode.com`, `.webnode.com.ar`
-   - `.jimdo.com`
-   - `.site123.me`
-   - `.godaddysites.com`
-   - `.mystrikingly.com`
-   - `.wbzak.net` *(plataforma de booking genérica, no sitio propio)*
-   - `.booking.com` *(perfil de Booking, no sitio propio)*
-   - `.tripadvisor.com` *(perfil, no sitio propio)*
-   - `.instagram.com`, `.facebook.com` *(red social como "sitio web")*
-
-Los negocios con dominio propio (ej: `mihotel.com.ar`, `restaurante.com`) se **descartan** del scoring — ya tienen sitio.
-
-Registrá cuántos se filtraron en esta etapa para el resumen final.
-
-### Scoring
-
-Por cada negocio que pasó el filtro, lanzá un **subagente en paralelo** que ejecute el skill `/analizar-prospectos` pasándole los datos del negocio:
-
-```
-nombre, dirección, teléfono, sitio_web, rating, cantidad_reseñas, estado, categorías
+```bash
+python3 scripts/puntuar-prospectos.py negocios/{SEARCH_SLUG}/{SEARCH_SLUG}.md
 ```
 
-Cada subagente devuelve un JSON con `score`, `tier`, `breakdown`, `por_que` y `angulo_venta`.
+El script aplica el pre-filtro de dominios builder/sociales, calcula el score (0-100) de cada candidato con la misma lógica que `/analizar-prospectos`, y genera:
+- `negocios/{SEARCH_SLUG}-scored.md` — tabla ordenada por score con ángulos de venta (en `negocios/`, no en la subcarpeta)
+- stdout — resumen con la lista de HOT listos para investigar
 
-Esperá a que todos los subagentes terminen. Descartá los negocios con `score < 80`. Si no quedan prospectos HOT, reportalo y terminá.
+Mové el scored al mismo directorio de búsqueda:
+
+```bash
+mv negocios/{SEARCH_SLUG}-scored.md negocios/{SEARCH_SLUG}/
+```
+
+Leé el archivo `negocios/{SEARCH_SLUG}/{SEARCH_SLUG}-scored.md` y extraé del bloque `## Datos JSON (para pipeline)` la lista de negocios con `score >= 70`. Si no hay ninguno, reportalo y terminá (sugerí ampliar radio o cambiar categoría).
 
 ---
 
-## Fase 3 — Procesamiento de prospectos HOT
+## Fase 3 — Procesamiento de prospectos seleccionados
 
-Por cada negocio con `score ≥ 80`:
+Por cada negocio con `score ≥ 70`:
 
 ### 3a — Crear carpeta
 
-Creá la carpeta `negocios/[slug-nombre]/` donde `slug-nombre` es el nombre del negocio en minúsculas, sin tildes, sin espacios (guión medio).
-- "Camping Los Ceibos" → `negocios/camping-los-ceibos/`
+Creá la carpeta `negocios/{SEARCH_SLUG}/[slug-nombre]/` donde `slug-nombre` es el nombre del negocio en minúsculas, sin tildes, sin espacios (guión medio).
+- "Camping Los Ceibos" → `negocios/{SEARCH_SLUG}/camping-los-ceibos/`
 
 ### 3b — Investigación en paralelo
 
@@ -134,7 +141,25 @@ Con los resultados de los 3 subagentes, completá el archivo `detalles.md` sigui
 - `SEO → Keywords` → del subagente ATRACCIÓN
 - Campos sin dato disponible → marcá como `[PENDIENTE]`, nunca inventés datos
 
-Guardá el archivo en `negocios/[slug-nombre]/detalles.md`.
+Guardá el archivo en `negocios/{SEARCH_SLUG}/[slug-nombre]/detalles.md`.
+
+### 3d — Actualizar negocios/README.md
+
+Después de generar el `detalles.md`, registrá el negocio en `negocios/README.md`:
+
+1. Leé el archivo actual `negocios/README.md`
+2. Agregá una fila en la tabla **"Prospectos con detalles.md listos"** con el formato:
+   ```
+   | {emoji_tier} {score} | {Nombre negocio} | `{SEARCH_SLUG}/{slug}` | {Rubro} | {teléfono} | ✅ | ❌ |
+   ```
+   - Emoji tier: 🔥 para score ≥ 80, ♨️ para 70-79
+3. Si la búsqueda generó archivos nuevos de prospección, agregá una fila en la tabla **"Archivos de prospección"**:
+   ```
+   | `{SEARCH_SLUG}/{SEARCH_SLUG}.md` | Búsqueda raw · {ciudad} · {radio} km · {categoría} · {N} negocios |
+   | `{SEARCH_SLUG}/{SEARCH_SLUG}-scored.md` | Scoring · {N_evaluados} evaluados · {N_seleccionados} seleccionados |
+   ```
+   Solo agregá las filas si esos archivos no estaban ya listados.
+4. Guardá el archivo actualizado.
 
 ---
 
@@ -152,11 +177,11 @@ Guardá el archivo en `negocios/[slug-nombre]/detalles.md`.
 
 Carpetas generadas:
 {Por cada HOT:}
-  📁 negocios/{slug}/ — {Nombre} ({score}/100)
+  📁 negocios/{SEARCH_SLUG}/{slug}/ — {Nombre} ({score}/100)
      ✅ detalles.md generado
 
 👉 Para generar el sitio de un prospecto:
-   cd negocios/{slug} y ejecutá el prompt principal indicando el estilo visual.
+   /generar-sitio {SEARCH_SLUG}/{slug}
 ```
 
 ---

@@ -15,125 +15,60 @@ Extraé del mensaje del usuario:
 
 Si el usuario no proveyó algún dato requerido, preguntale antes de continuar.
 
-Verificá si existe la variable de entorno `GOOGLE_PLACES_API_KEY`. Si no existe, pedila al usuario antes de continuar.
+---
+
+## Ejecución
+
+Esta skill delega toda la búsqueda al script Python `scripts/buscar-negocios.py`, que llama directamente a la Google Places API sin gastar tokens de LLM.
+
+Construí el comando con los parámetros extraídos y ejecutalo:
+
+```bash
+python scripts/buscar-negocios.py \
+  --ciudad "{CIUDAD}" \
+  --radio {RADIO} \
+  [--rubro "{RUBRO}"] \
+  [--rubros "{RUBRO1},{RUBRO2},{RUBRO3}"]
+```
+
+- La API key se lee automáticamente del archivo `.env` (`GOOGLE_PLACES_API_KEY`).
+- Si `.env` no existe o la key no está, el script lo reportará con instrucciones claras.
+- El archivo de salida se guarda en `negocios/` con el nombre `{ciudad}-{radio}[-{rubro}|multi].md`.
+- **`--rubros`** corre una búsqueda por rubro y deduplica los resultados — permite superar el límite de 60 de la API.
+
+### Ejemplos de comando
+
+```bash
+# Solo ciudad y radio (búsqueda general)
+python scripts/buscar-negocios.py --ciudad "San Martín de los Andes" --radio 5
+
+# Un rubro
+python scripts/buscar-negocios.py --ciudad "Bariloche" --radio 10 --rubro restaurant
+
+# Múltiples rubros — supera el límite de 60
+python scripts/buscar-negocios.py --ciudad "Potrerillos" --radio 5 --rubros "restaurant,lodging,campground"
+
+# Con API key explícita (si no hay .env)
+python scripts/buscar-negocios.py --ciudad "Mendoza" --radio 3 --rubro hotel --api-key TU_KEY
+```
+
+### Rubros comunes de Google Places
+
+| Categoría | Tipos útiles |
+|-----------|-------------|
+| Gastronomía | `restaurant`, `cafe`, `bar`, `bakery`, `meal_delivery` |
+| Alojamiento | `lodging`, `campground` |
+| Salud | `pharmacy`, `doctor`, `dentist`, `gym` |
+| Comercio | `store`, `supermarket`, `clothing_store`, `beauty_salon` |
+| Servicios | `car_repair`, `laundry`, `bank` |
 
 ---
 
-## Paso 1 — Geocodificar la ciudad
+## Después de ejecutar
 
-Llamá a la Geocoding API para obtener coordenadas:
-
-```
-GET https://maps.googleapis.com/maps/api/geocode/json?address={CIUDAD}&key={API_KEY}
-```
-
-Extraé `results[0].geometry.location` → `{ lat, lng }`. Si falla, reportá el error y detenete.
-
----
-
-## Paso 2 — Buscar negocios (Nearby Search)
-
-Convertí el radio de km a metros (× 1000). Llamá a Nearby Search:
-
-```
-GET https://maps.googleapis.com/maps/api/place/nearbysearch/json
-  ?location={LAT},{LNG}
-  &radius={RADIO_METROS}
-  &type={RUBRO_SI_APLICA}
-  &language=es
-  &key={API_KEY}
-```
-
-Paginá con `next_page_token` hasta un máximo de **60 negocios** (3 páginas). Esperá 2 segundos entre páginas. Guardá el `place_id` de cada resultado.
-
----
-
-## Paso 3 — Obtener detalles de cada negocio
-
-Para cada `place_id`:
-
-```
-GET https://maps.googleapis.com/maps/api/place/details/json
-  ?place_id={PLACE_ID}
-  &fields=name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,business_status,types
-  &language=es
-  &key={API_KEY}
-```
-
-Extraé por negocio:
-- `nombre`, `dirección`, `teléfono` (usar `formatted_phone_number`, null si no tiene)
-- `sitio_web` (null si no tiene) → derivar `tiene_web: true/false`
-- `rating` (0 si no tiene), `cantidad_reseñas` (0 si no tiene)
-- `estado` (`business_status`), `categorías` (primeros 3 de `types`)
-
-Excluí negocios con `business_status: CLOSED_PERMANENTLY`. Esperá 1s entre llamadas si hay más de 60 negocios para respetar el límite de 60 RPM.
-
----
-
-## Paso 4 — Generar el archivo Markdown
-
-Nombre del archivo: `{ciudad}-{radio}-{rubro}.md`, todo en minúsculas, sin tildes, sin espacios (guión medio). Si el rubro es "General", omitirlo del nombre.
-- "Buenos Aires", 5km, restaurantes → `buenos-aires-5-restaurantes.md`
-- "Córdoba", 2km, alojamientos → `cordoba-2-alojamientos.md`
-- "San Martín", 10km, general → `san-martin-10.md`
-
-Guardarlo en la carpeta `negocios/` del proyecto. Si no existe, crearla antes de guardar.
-
-Estructura:
-
-```markdown
-# Negocios en {CIUDAD}
-
-**Búsqueda realizada:** {FECHA_ISO}
-**Radio:** {RADIO} km
-**Rubro:** {RUBRO o "General"}
-**Total encontrados:** {N}
-**Con sitio web:** {N_CON} ({%}%)
-**Sin sitio web:** {N_SIN} ({%}%)
-
----
-
-## Sin sitio web ({N_SIN})
-
-> Prospectos principales para venta de sitios web.
-
-| # | Nombre | Dirección | Teléfono | Rating | Reseñas | Categorías |
-|---|--------|-----------|----------|--------|---------|------------|
-...
-
----
-
-## Con sitio web ({N_CON})
-
-| # | Nombre | Sitio Web | Dirección | Teléfono | Rating | Reseñas |
-|---|--------|-----------|-----------|----------|--------|---------|
-...
-
----
-
-## Datos crudos (JSON)
-
-> Para uso del skill /analizar-prospectos. No editar manualmente.
-
-\`\`\`json
-[{ "nombre": "...", "dirección": "...", "teléfono": "...", "sitio_web": "...", "tiene_web": false, "rating": 4.2, "cantidad_reseñas": 87, "estado": "OPERATIONAL", "categorías": ["restaurant"] }]
-\`\`\`
-```
-
----
-
-## Paso 5 — Resumen final
-
-```
-✅ Búsqueda completada
-📍 Ciudad: {CIUDAD} ({RADIO} km)
-🏪 Negocios encontrados: {N}
-🌐 Con sitio web:  {N} ({%}%)
-🚫 Sin sitio web:  {N} ({%}%)
-💾 Archivo guardado: negocios/{ciudad}-{radio}-{rubro}.md
-
-👉 Para analizar los prospectos ejecutá: /analizar-prospectos {CIUDAD}
-```
+1. Mostrá al usuario el output del script (resumen de negocios encontrados + ruta del archivo).
+2. Si el script falló (API key ausente, ciudad no encontrada, etc.), reportá el error y guiá al usuario.
+3. Si el script terminó exitosamente, informá que puede continuar con `/prospectar` para scoring y generación de `detalles.md`.
 
 ---
 
@@ -141,7 +76,7 @@ Estructura:
 
 | Error | Acción |
 |-------|--------|
-| API Key ausente o inválida | Pedirla. Obtenerla en console.cloud.google.com |
-| Ciudad no encontrada | Reportar y sugerir nombres alternativos |
-| Cuota excedida | Guardar lo obtenido y avisar |
-| Place Details falla en un negocio | Saltearlo, listar al final cuáles fallaron |
+| `GOOGLE_PLACES_API_KEY` ausente | Pedirla. Obtenerla en console.cloud.google.com |
+| Ciudad no encontrada | Sugerir nombres alternativos o usar nombre completo |
+| Cuota excedida | El script guarda lo obtenido antes del error |
+| Python no instalado | `python3 --version` para verificar; instalar si falta |

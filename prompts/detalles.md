@@ -13,7 +13,9 @@ Nombre:         [Nombre de tu empresa o producto]
 Rubro:          [Ej: SaaS, E-commerce, Servicios profesionales, App móvil]
 Industria:      [Ej: Fintech, Salud, Educación, Marketing, Legal]
 URL:            [tudominio.com]
+Teléfono:       [Ej: 011 4567-8901]
 Email contacto: [hola@tudominio.com]
+Dirección:      [Calle y número, Ciudad, Provincia, País]
 ```
 
 ---
@@ -34,8 +36,9 @@ CTA primario:   [Texto del botón principal] → [URL o acción]
 CTA secundario: [Texto del enlace secundario]
                 Ej: "Ver cómo funciona ↓"
 
-Visual:         [Descripción de la imagen/video/mockup a usar]
-                Ej: Screenshot del dashboard, video de demo de 30seg, ilustración isométrica
+Visual hero:    [Descripción de la imagen de fondo a usar]
+                Ruta esperada: /public/images/hero.jpg
+                Ej: Foto del local en plena actividad, foto del producto principal, foto del equipo
 
 Social proof mínima: [Una línea de credibilidad]
                 Ej: "Más de 1.200 equipos de ventas ya lo usan"
@@ -92,6 +95,52 @@ Features principales:
 - [Feature 6] (opcional)
   Beneficio: [...]
   Ícono sugerido: [...]
+```
+
+---
+
+## Galería / Fotos
+
+```
+Título sección: [Ej: "Así es nuestro trabajo", "El lugar", "Nuestros platos"]
+Subtítulo:      [Una línea descriptiva]
+
+Imagen 1 (destacada, ocupa 2 columnas en desktop):
+  Ruta:    /public/images/gallery/01.jpg
+  Alt:     [Descripción accesible de la imagen]
+  Caption: [Texto corto opcional]
+
+Imagen 2:
+  Ruta:    /public/images/gallery/02.jpg
+  Alt:     [...]
+  Caption: [...]
+
+Imagen 3:
+  Ruta:    /public/images/gallery/03.jpg
+  Alt:     [...]
+  Caption: [...]
+
+Imagen 4:
+  Ruta:    /public/images/gallery/04.jpg
+  Alt:     [...]
+  Caption: [...]
+
+Imagen 5: (opcional)
+Imagen 6: (opcional)
+Imagen 7: (opcional)
+Imagen 8: (opcional)
+```
+
+---
+
+## Ubicación
+
+```
+Dirección completa: [igual que en ## Negocio]
+Referencia:         [Ej: "A 2 cuadras de la plaza central"]
+Horarios:           [Ej: Lun-Vie 9-18hs / Sáb 10-14hs]
+WhatsApp:           [Número en formato internacional, ej: 5491154321234]
+Link Google Maps:   [URL completa de Google Maps al lugar]
 ```
 
 ---
